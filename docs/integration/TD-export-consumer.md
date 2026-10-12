@@ -62,7 +62,7 @@ earlier source-22 / pagination inputs are unchanged and re-pinned by the conform
 `node scripts/prepare-export-conformance.mjs <export-producer-handoff-0c4>` verifies all 34 artifact byte strings against the handoff pins and writes
 `candidate-receipts/receipt-00..16.json`. All 17 copies are now committed and mandatory: `npm test -- --run` fails collection before registering this suite if any receipt is missing. There is no optional receipt mode or environment setting to bypass this requirement.
 
-For an incomplete checkout, first restore the exact committed copies. Only when restoring from the original accepted handoff directory, use the pinned preparation command above; it must verify all 34 artifact byte strings before the suite can run. Do not synthesize replacement receipts or weaken their pins. The pending-copy text in the unchanged `PROVENANCE.json` is the historical initial provisioning record, not the current test requirement.
+For an incomplete checkout, restore missing receipt files from Git. In particular, `tests/fixtures/export-conformance/candidate-receipts/receipt-00.json` must already be restored and unchanged before the preparation command runs: the script reads it and compares it with the accepted packet before writing any receipt. The command cannot bootstrap a missing receipt 0. After that prerequisite is met, use the pinned preparation command above only with the original accepted handoff directory; it must verify all 34 artifact byte strings before the suite can run. Do not synthesize replacement receipts or weaken their pins. The pending-copy text in the unchanged `PROVENANCE.json` is the historical initial provisioning record, not the current test requirement.
 
 ## Limits
 
