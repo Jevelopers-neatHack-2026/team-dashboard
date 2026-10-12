@@ -55,13 +55,14 @@ explicit click.
 ## Conformance inputs
 
 `tests/fixtures/export-conformance` holds portable, digest-pinned inputs (no absolute paths): `PROVENANCE.json`, `candidate-pins.json` (17 receipts / 34 artifact files),
-`candidate-receipts/receipt-00.json` and the pinned manifest schema as **data only**. Producer source and its synthetic disclosure host are pinned references in the handoff and
+all 17 `candidate-receipts/receipt-00.json` through `receipt-16.json` copies and the pinned manifest schema as **data only**. Producer source and its synthetic disclosure host are pinned references in the handoff and
 are never imported or executed. The producer's `prepared-export-request.json` is a structural fixture, not the actual PostgreSQL request, and is not copied or relabelled. The
 earlier source-22 / pagination inputs are unchanged and re-pinned by the conformance test.
 
 `node scripts/prepare-export-conformance.mjs <export-producer-handoff-0c4>` verifies all 34 artifact byte strings against the handoff pins and writes
-`candidate-receipts/receipt-00..16.json`. Until it has been run and committed, the pinned suite checks receipt 0 only and reports the rest pending; set
-`TD_REQUIRE_EXPORT_FIXTURES=1` to turn pending into a failure.
+`candidate-receipts/receipt-00..16.json`. All 17 copies are now committed and mandatory: `npm test -- --run` fails collection before registering this suite if any receipt is missing. There is no optional receipt mode or environment setting to bypass this requirement.
+
+For an incomplete checkout, first restore the exact committed copies. Only when restoring from the original accepted handoff directory, use the pinned preparation command above; it must verify all 34 artifact byte strings before the suite can run. Do not synthesize replacement receipts or weaken their pins. The pending-copy text in the unchanged `PROVENANCE.json` is the historical initial provisioning record, not the current test requirement.
 
 ## Limits
 

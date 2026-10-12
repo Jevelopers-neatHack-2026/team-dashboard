@@ -72,9 +72,10 @@ The shipped package reads no environment variables and contains no provider cred
 | `TD_TEST_PORT` | Fixture/test server port; default `49171`, with strict port selection |
 | `TD_ARTIFACT_DIR` | Playwright report and screenshot directory; default `test-results` |
 | `SHARED_CONTRACTS_NODE_BIN` | Optional directory containing the producer's exact Node `22.23.3` executable for `contracts:provision` |
-| `TD_REQUIRE_EXPORT_FIXTURES` | `1` makes missing captured export fixtures a test failure; it grants no integrated access |
 
 ## Checks
+
+The export conformance suite requires all 17 committed receipts (`receipt-00.json` through `receipt-16.json`) before it registers tests. A missing receipt fails collection regardless of environment settings. Restore the exact accepted copies rather than generating replacements; the [export consumer guide](docs/integration/TD-export-consumer.md#conformance-inputs) describes the pinned recovery workflow.
 
 ```sh
 npm run lint
