@@ -1,10 +1,14 @@
 {
+  "license": "MIT",
   "name": "@jevelopers/team-dashboard",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "COPYRIGHT.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "engines": {
     "node": ">=24.15.0 <25",

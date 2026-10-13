@@ -139,4 +139,4 @@ Provisioning checks the producer source and archive against [`contracts/shared-c
 
 ## Contributing
 
-Follow the organization [contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). No license file is present in this repository.
+Follow the organization [contributor guidance](https://github.com/Jevelopers-neatHack-2026/.github/blob/main/CONTRIBUTING.md). See the [MIT License](LICENSE) and [COPYRIGHT.md](COPYRIGHT.md) for original-software licensing, team attribution and preserved third-party rights.
