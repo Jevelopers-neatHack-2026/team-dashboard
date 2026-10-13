@@ -1,19 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { requireExportReceiptIndices } from './export-fixture-inventory';
 import { checkPreparedExport, type FinanceV2PreparedExpectation } from '../../src/views/finance-v2';
 import { inspectPreparedExportStructure as checkStructure } from '../../src/views/finance-v2/export-check';
 import { DIR, clone, expectationZero, hasReceipt, json, loadCandidate, ok, pins, receiptZero, sha256, ZERO, type Candidate } from './export-support';
 
 /**
  * SYNTHETIC_EXPORT_CONFORMANCE_ONLY pinned-artifact conformance against the Finance export producer's ACTUAL candidate receipts (producer 0c4c7024, tree 377cd19b, merge ef6dee41,
- * candidate f8e06f3d run 38254570860). 17 receipts / 34 artifact files are pinned byte for byte. Receipt 0 is committed here and always checked; receipts 1..16 are checked as soon as
- * `scripts/prepare-export-conformance.mjs` has written them from the producer packet, and are reported pending (a failure with TD_REQUIRE_EXPORT_FIXTURES=1) until then.
+ * candidate f8e06f3d run 38254570860). All 17 receipts / 34 artifact files are committed and required byte for byte. An incomplete checkout fails before this suite registers;
+ * no environment flag can make a required receipt optional. Historical provisioning notes in PROVENANCE.json remain unchanged as original evidence.
  * Nothing here is a mounted host, a live issuer, CFO delivery or a consumer acceptance, and no producer source is imported or executed.
  */
-const required = process.env.TD_REQUIRE_EXPORT_FIXTURES === '1';
-const indices = Array.from({ length: 17 }, (_unused, index) => index);
-const present = indices.filter(hasReceipt);
-const pending = indices.filter((index) => !hasReceipt(index));
+const indices = requireExportReceiptIndices(hasReceipt);
 const rich = (index: number): boolean => pins.receipts[index]!.schema === 'rich-2.0.0';
 
 /** Expectation for an arbitrary receipt: hashes from the pinned handoff table; scope, period and currencies read from that receipt's own summary.json (receipt 0 is independently literal below). */
@@ -61,7 +59,7 @@ describe('provenance and pins are complete and portable', () => {
 
 describe('the committed candidate bytes are exactly the pinned bytes', () => {
   it('receipt 0 is always present', () => { expect(hasReceipt(0)).toBe(true); });
-  it.each(present)('receipt %i: both artifacts hash to the pinned sha256 and byte length, and the receipt query binding is the pinned one', (index) => {
+  it.each(indices)('receipt %i: both artifacts hash to the pinned sha256 and byte length, and the receipt query binding is the pinned one', (index) => {
     const candidate = loadCandidate(index);
     const pin = pins.receipts[index]!;
     expect(candidate.query).toEqual({ snapshotId: pin.snapshotId, queryContentHash: pin.queryContentHash, summaryContentHash: pin.summaryContentHash });
@@ -74,9 +72,8 @@ describe('the committed candidate bytes are exactly the pinned bytes', () => {
       expect(artifact.byteLength).toBe(pin.files[name]!.byteLength);
     }
   });
-  it('reports the receipts still pending the producer-packet copy (a failure when TD_REQUIRE_EXPORT_FIXTURES=1)', () => {
-    if (required) expect(pending).toEqual([]);
-    else expect(present).toContain(0);
+  it('all 17 accepted candidate receipts remain present', () => {
+    expect(indices.filter(hasReceipt)).toEqual(indices);
   });
 });
 
@@ -91,16 +88,16 @@ describe('the consumer guard against the actual receipts', () => {
       expect(result.files.map((file) => file.content)).toEqual(receipt.artifacts.map((artifact) => artifact.content));
     }
   });
-  it.each(present.filter(rich))('rich receipt %i is accepted for its own pinned snapshot and refused for every other receipt\'s snapshot', async (index) => {
+  it.each(indices.filter(rich))('rich receipt %i is accepted for its own pinned snapshot and refused for every other receipt\'s snapshot', async (index) => {
     const candidate = loadCandidate(index);
     expect((await checkPreparedExport(ok(candidate.receipt), expectationFor(index, candidate))).ok).toBe(true);
-    for (const other of present.filter(rich)) {
+    for (const other of indices.filter(rich)) {
       if (other === index || pins.receipts[other]!.snapshotId === pins.receipts[index]!.snapshotId) continue;
       const result = await checkPreparedExport(ok(candidate.receipt), expectationFor(other, loadCandidate(other)));
       expect(result.ok).toBe(false);
     }
   });
-  it.each(present.filter(rich))('rich receipt %i: preserved currencies, exact signed decimals, nulls and 11 rows per currency', async (index) => {
+  it.each(indices.filter(rich))('rich receipt %i: preserved currencies, exact signed decimals, nulls and 11 rows per currency', async (index) => {
     const { receipt } = loadCandidate(index);
     const manifest = receipt.manifest;
     const csv = receipt.artifacts[1]!.content;
@@ -120,16 +117,14 @@ describe('the consumer guard against the actual receipts', () => {
     // The consumer never rewrites the delivered text.
     expect(await checkPreparedExport(ok(receipt), expectationFor(index, loadCandidate(index)))).toMatchObject({ ok: true });
   });
-  it.each(present.filter((index) => !rich(index)))('legacy receipt %i is refused by the Finance v2 consumer as UNSUPPORTED_SHAPE, with no bytes', async (index) => {
+  it.each(indices.filter((index) => !rich(index)))('legacy receipt %i is refused by the Finance v2 consumer as UNSUPPORTED_SHAPE, with no bytes', async (index) => {
     const result = await checkPreparedExport(ok(loadCandidate(index).receipt), expectationZero());
     expect(result).toEqual({ ok: false, kind: 'refused', code: 'UNSUPPORTED_SHAPE', path: '/value' });
   });
   it('receipt 16 shares receipt 0\'s projection hash but another query: it cannot stand in for receipt 0', async () => {
-    if (!hasReceipt(16)) return;
     expect(await checkPreparedExport(ok(loadCandidate(16).receipt), expectationZero())).toMatchObject({ ok: false, kind: 'refused', code: 'SNAPSHOT_MISMATCH' });
   });
   it('a receipt\'s own copy of its artifacts cannot be recombined: receipt 0 manifest with another receipt\'s files is refused', async () => {
-    if (!hasReceipt(2)) return;
     const mixed = clone(receiptZero().receipt);
     mixed.artifacts = clone(loadCandidate(2).receipt.artifacts);
     expect(await checkPreparedExport(ok(mixed), expectationZero())).toMatchObject({ ok: false, kind: 'refused', code: 'ARTIFACT_MISMATCH' });

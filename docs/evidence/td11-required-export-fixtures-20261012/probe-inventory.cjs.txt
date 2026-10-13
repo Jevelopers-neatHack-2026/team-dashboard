@@ -1,0 +1,82 @@
+// TEST_BUILT registration/presence probe, not a Vitest/React/browser/Finance run.
+const fs = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const path = require('node:path');
+const util = require('node:util');
+const ts = require('typescript');
+const sourcePath = process.argv[2];
+if (!sourcePath) throw new Error('Usage: node probe-inventory.cjs <conformance-test.ts>');
+const source = fs.readFileSync(sourcePath);
+const compile = (bytes) => ts.transpileModule(bytes.toString(), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
+const blob = (bytes) => crypto.createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+const indices = Array.from({ length: 17 }, (_, index) => index);
+const expectedCount = 74;
+const inventoryTitle = /^(reports the receipts still pending|all 17 accepted candidate receipts remain present)/;
+const normalize = (value) => JSON.parse(JSON.stringify(value));
+let helper;
+let helperBlob = null;
+if (source.includes(Buffer.from('./export-fixture-inventory'))) {
+  const bytes = fs.readFileSync(path.join(path.dirname(sourcePath), 'export-fixture-inventory.ts'));
+  helperBlob = blob(bytes);
+  const exports = {};
+  vm.runInNewContext(compile(bytes), { exports }, { timeout: 1000 });
+  helper = exports;
+}
+function inspect(present, flag) {
+  const registered = [];
+  const it = (title, callback) => registered.push({ title, callback });
+  it.each = (values) => (title, callback) => {
+    values.forEach((value) => {
+      const args = Array.isArray(value) ? value : [value];
+      registered.push({ title: util.format(title, ...args), callback: () => callback(...args) });
+    });
+  };
+  const unused = () => { throw new Error('Unexpected financial or filesystem execution in registration-only probe'); };
+  const testExpect = (actual) => ({
+    toEqual(expected) { assert.deepEqual(normalize(actual), normalize(expected)); },
+    toContain(expected) { assert.ok(actual.includes(expected)); },
+  });
+  const support = {
+    DIR: 'TEST_BUILT/', hasReceipt: (index) => present.has(index),
+    pins: { receipts: indices.map((index) => ({ index, schema: index === 1 ? 'legacy-1.0.0' : 'rich-2.0.0' })) },
+    json: () => ({}), clone: unused, expectationZero: unused, loadCandidate: unused, ok: unused, receiptZero: unused, sha256: unused, ZERO: {},
+  };
+  const modules = {
+    'node:fs': { readFileSync: unused },
+    'vitest': { describe: (_name, callback) => callback(), it, expect: testExpect },
+    '../../src/views/finance-v2': { checkPreparedExport: unused },
+    '../../src/views/finance-v2/export-check': { inspectPreparedExportStructure: unused },
+    './export-support': support,
+    './export-fixture-inventory': helper,
+  };
+  try {
+    const env = flag === undefined ? {} : { TD_REQUIRE_EXPORT_FIXTURES: flag };
+    vm.runInNewContext(compile(source), { exports: {}, process: { env }, require(name) {
+      if (!modules[name]) throw new Error(`Unexpected module ${name}`);
+      return modules[name];
+    } }, { filename: 'conformance-test.ts', timeout: 1000 });
+    const inventory = registered.filter((entry) => inventoryTitle.test(entry.title));
+    assert.equal(inventory.length, 1, 'Expected exactly one real source inventory assertion');
+    inventory[0].callback();
+    return { accepted: true, registered: registered.length };
+  } catch (error) {
+    return { accepted: false, registered: registered.length, rejection: error.message };
+  }
+}
+const results = [];
+for (const flag of [undefined, '0', '1']) {
+  const full = inspect(new Set(indices), flag);
+  results.push({ name: `complete inventory, flag=${flag ?? 'unset'}`, expected: '74 registered and inventory accepted', observed: full, pass: full.accepted && full.registered === expectedCount });
+  for (const missing of indices) {
+    const present = new Set(indices.filter((index) => index !== missing));
+    const omitted = inspect(present, flag);
+    present.add(missing);
+    const restored = inspect(present, flag);
+    results.push({ name: `missing receipt ${missing}, flag=${flag ?? 'unset'}, then restore`, expected: 'omission rejected; restoration accepts all 74 cases', observed: { omitted, restored }, pass: !omitted.accepted && restored.accepted && restored.registered === expectedCount });
+  }
+}
+const report = { mode: 'TEST_BUILT registration/presence probe; executes source registration and inventory assertion only, not financial test bodies or Vitest/React/browser/Finance', runtime: process.version, transpiler: ts.version, sourceGitBlob: blob(source), helperGitBlob: helperBlob, results, passed: results.filter(x => x.pass).length, failed: results.filter(x => !x.pass).length, skipped: 0 };
+console.log(JSON.stringify(report, null, 2));
+process.exitCode = report.failed ? 1 : 0;
