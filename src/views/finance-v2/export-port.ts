@@ -72,7 +72,8 @@ const SCOPE_KEYS = ['tenantId', 'projectId', 'environment', 'billingMode', 'acto
  * Fails closed on a missing reader, a throwing reader or a malformed answer. Returns `null` only when everything holds right now.
  */
 export function evaluateFinanceV2ExportAccess(reader: unknown, bound: Readonly<{ revision: string; scope: OpaqueProductScope }>, nowMs: number): FinanceV2ExportUnavailableReason | null {
-  if (typeof reader !== 'function') return 'no-access';
+  // A clock that cannot establish an instant cannot establish current access. Never coerce it.
+  if (!Number.isFinite(nowMs) || typeof reader !== 'function') return 'no-access';
   let revision: unknown; let scope: unknown; let capabilities: unknown; let expiresAt: unknown;
   try {
     const access: unknown = (reader as FinanceV2ExportAccessReader)();
@@ -199,7 +200,9 @@ function unavailableNow(o: FinanceV2PreparedExportOptions, boundFingerprint?: st
   const resolved = resolveFinanceV2ExportPort(o.mode, o.port);
   if (resolved.status === 'unavailable') return resolved.reason;
   if (!o.firstPage) return 'not-first-page';
-  const access = evaluateFinanceV2ExportAccess(o.access, { revision: o.authorization.revision, scope: o.scope }, (o.now ?? Date.now)());
+  let nowMs: number;
+  try { nowMs = (o.now ?? Date.now)(); } catch { return 'no-access'; }
+  const access = evaluateFinanceV2ExportAccess(o.access, { revision: o.authorization.revision, scope: o.scope }, nowMs);
   if (access !== null) return access;
   return boundFingerprint !== undefined && fingerprintOf(o.page) !== boundFingerprint ? 'source-changed' : null;
 }
