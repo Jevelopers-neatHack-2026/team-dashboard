@@ -157,6 +157,13 @@ export type FinanceV2PreparedExportResult = Readonly<{
 
 const identities = new WeakMap<object, number>();
 let nextIdentity = 1;
+function identityOf(value: unknown): number {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return 0;
+  let id = identities.get(value);
+  if (id === undefined) { id = nextIdentity++; identities.set(value, id); }
+  return id;
+}
+let nextUnfingerprintable = 1;
 function canonical(value: unknown, depth: number): string {
   if (depth > 64) throw new Error('too deep');
   if (value === null) return 'null';
@@ -172,13 +179,6 @@ function canonical(value: unknown, depth: number): string {
     default: throw new Error('not data');
   }
 }
-function identityOf(value: unknown): number {
-  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return 0;
-  let id = identities.get(value);
-  if (id === undefined) { id = nextIdentity++; identities.set(value, id); }
-  return id;
-}
-let nextUnfingerprintable = 1;
 /**
  * Value fingerprint (canonical key order) of the WHOLE accepted source page: envelope, scope, filters, watermark, summary and its references. It is a change detector over what the host
  * handed over, not a hash of anything financial and not a proof; nothing is recomputed from amounts. A page that cannot be read as plain data never equals itself, so it fails closed.
