@@ -242,7 +242,7 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
   // An observed render-time veto invalidates this run, not just its visible controls.
   // Clear both pending work and prepared status so recovery cannot revive either.
   useEffect(() => {
-    if (unavailable === null || (active.current === null && held.current === null)) return;
+    if (unavailable === null) return;
     active.current?.cancel(); active.current = null; held.current = null;
     setSettled({ key: runKey, state: { phase: 'discarded', reason: unavailable } });
   }, [unavailable, runKey]);
