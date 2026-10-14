@@ -145,8 +145,10 @@ describe('clock failures at the actual export lifecycle boundary', () => {
     const f = fixture(() => clock());
     f.prepare.mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }));
     const { result, rerender, unmount } = renderHook(() => usePreparedExport(f.options));
-    act(() => result.current.prepare());
-    await waitFor(() => expect(f.prepare).toHaveBeenCalledTimes(1));
+    // Flush the resolved token before observing the deliberately pending port.
+    // waitFor polls with setInterval, which this test intentionally controls.
+    await act(async () => { result.current.prepare(); });
+    expect(f.prepare).toHaveBeenCalledTimes(1);
     const request = f.prepare.mock.calls[0]![0];
     clock = bad;
     act(() => { vi.advanceTimersByTime(250); });
@@ -160,11 +162,51 @@ describe('clock failures at the actual export lifecycle boundary', () => {
     noDisclosure();
     unmount();
   });
+  it.each(invalidClocks)('%s observed during render cancels an outstanding preparation', async (_name, bad) => {
+    let clock = () => NOW;
+    let answer!: (value: unknown) => void;
+    const f = fixture(() => clock());
+    f.prepare.mockImplementationOnce(() => new Promise(resolve => { answer = resolve; }));
+    const { result, rerender } = renderHook(() => usePreparedExport(f.options));
+    await act(async () => { result.current.prepare(); });
+    expect(f.prepare).toHaveBeenCalledTimes(1);
+    const request = f.prepare.mock.calls[0]![0];
+    clock = bad;
+    rerender();
+    expect(result.current.unavailable).toBe('no-access');
+    expect(request.signal.aborted).toBe(true);
+    clock = () => NOW;
+    rerender();
+    await act(async () => { answer(prepared()); });
+    expect(result.current.state).toEqual({ phase: 'discarded', reason: 'no-access' });
+    expect(result.current.download()).toBeNull();
+    noDisclosure();
+  });
+  it.each(invalidClocks)('%s observed during render cannot resurrect a prepared result after recovery', async (_name, bad) => {
+    let clock = () => NOW;
+    const f = fixture(() => clock());
+    const { result, rerender } = renderHook(() => usePreparedExport(f.options));
+    act(() => result.current.prepare());
+    await waitFor(() => expect(result.current.state.phase).toBe('prepared'));
+    clock = bad;
+    rerender();
+    expect(result.current.unavailable).toBe('no-access');
+    clock = () => NOW;
+    rerender();
+    expect(result.current.state).toEqual({ phase: 'discarded', reason: 'no-access' });
+    expect(result.current.download()).toBeNull();
+    noDisclosure();
+    act(() => result.current.prepare());
+    await waitFor(() => expect(result.current.state.phase).toBe('prepared'));
+    expect(f.prepare).toHaveBeenCalledTimes(2);
+    noDisclosure();
+  });
   it('preserves the default wall clock and the normal explicit download control', async () => {
     const f = fixture();
     const { now: _injected, ...options } = f.options;
     void _injected;
-    const { result } = renderHook(() => usePreparedExport({ ...options, access: () => ({ ...access(), expiresAt: '2099-01-01T00:00:00Z' }) }));
+    const defaultOptions = { ...options, access: () => ({ ...access(), expiresAt: '2099-01-01T00:00:00Z' }) };
+    const { result } = renderHook(() => usePreparedExport(defaultOptions));
     act(() => result.current.prepare());
     await waitFor(() => expect(result.current.state.phase).toBe('prepared'));
     expect(URL.createObjectURL).not.toHaveBeenCalled();
