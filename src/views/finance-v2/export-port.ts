@@ -239,8 +239,13 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
 
   // A different identity or format starts from nothing: the in-flight run is cancelled, any held bytes are dropped.
   useEffect(() => () => { active.current?.cancel(); active.current = null; held.current = null; }, [runKey]);
-  // Once access no longer holds at render time, nothing prepared may stay reachable.
-  useEffect(() => { if (unavailable !== null) held.current = null; });
+  // An observed render-time veto invalidates this run, not just its visible controls.
+  // Clear both pending work and prepared status so recovery cannot revive either.
+  useEffect(() => {
+    if (unavailable === null || (active.current === null && held.current === null)) return;
+    active.current?.cancel(); active.current = null; held.current = null;
+    setSettled({ key: runKey, state: { phase: 'discarded', reason: unavailable } });
+  });
 
   const state: FinanceV2ExportState = unavailable !== null ? { phase: 'idle' } : settled !== null && settled.key === runKey ? settled.state : { phase: 'idle' };
 
