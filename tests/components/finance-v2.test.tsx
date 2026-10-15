@@ -270,7 +270,7 @@ describe('transaction drilldown', () => {
       const provider = useMemo(() => fixtureProvider('ready'), []);
       const [pathname, query] = url.split('?') as [string, string | undefined];
       const search = new URLSearchParams(query ?? '');
-      const navigate = (href: string) => { const target = new URL(href, 'http://host.test'); setUrl(target.pathname + (target.search || (query ? `?${query}` : ''))); };
+      const navigate = (href: string) => { const target = new URL(href, 'http://host.test'); setUrl(target.pathname + (href.includes('?') ? target.search : (query ? `?${query}` : ''))); };
       const context = query ? `?${query}` : '';
       return <>
         <output data-testid="url">{url}</output>
@@ -313,8 +313,12 @@ describe('transaction drilldown', () => {
       expect(within(table()).getAllByRole('row')).toHaveLength(2);
       expect(table()).toHaveTextContent('8.000000000000000000 EUR');
     });
-    it('shows an offered-nowhere host value as all rather than guessing, and still lists every row', async () => {
-      render(<UrlHost start="/admin/finance/transactions?valuation=bogus&currency=JPY" />);
+    it.each(['valuation=bogus&currency=USD', 'valuation=all&currency=JPY', 'valuation=bogus&currency=JPY'])('blocks unsupported host filters %s until an explicit reset', async (query) => {
+      render(<UrlHost start={`/admin/finance/transactions?${query}`} />);
+      expect(await screen.findByRole('heading', { name: 'Transaction filters unavailable' })).toBeVisible();
+      expect(screen.queryByRole('table', { name: 'Transaction details' })).toBeNull();
+      expect(screen.queryByText('8.000000000000000000 EUR')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Reset transaction filters' }));
       expect(await screen.findByLabelText('Valuation')).toHaveValue('all');
       expect(screen.getByLabelText('Currency')).toHaveValue('all');
       expect(within(screen.getByRole('table', { name: 'Transaction details' })).getAllByRole('row')).toHaveLength(6);
