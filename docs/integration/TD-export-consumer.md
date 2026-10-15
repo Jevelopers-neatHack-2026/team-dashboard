@@ -80,3 +80,25 @@ JSON-prepared receipt and is refused on format, which is the intended negative c
 - All 90 captured file bytes (34 original receipt files + 56 positive case files) are re-hashed with node crypto.
 - Late denials are not a claim of fresh database execution or zero SQL reads (their captured counters grow). The entry cases did no protected I/O (equal counters, `storeLookups` 0).
 - Fixture host: `v2export=captured-late-forbidden` and `v2export=captured-entry-source` replay the exact captured `actualResult` while the page's own access is allowed. The authority behind the capture is a synthetic single-state host, not a live issuer; no CFO delivery or consumer acceptance is implied.
+
+## Current-access clock and recovery
+
+`usePreparedExport` and `PreparedExportPanel` use `Date.now` by default and allow a
+host-injected `now` callback. Every current-access evaluation requires a finite
+primitive number of milliseconds. Non-number or non-finite readings are not coerced;
+a clock lookup or invocation that throws is contained without inspecting its exception.
+These conditions produce the existing `no-access` state, not an invented time, a
+fallback clock reading, a confirmed expiry, or an export success.
+
+The clock is checked at the existing renewal points: render, preparation, asynchronous
+continuations, the periodic watcher, and immediately before manual download. A veto
+observed during render also cancels pending work and discards prepared status and bytes.
+Restoring access or the clock does not revive that cancelled run or discarded result;
+the user must start a fresh preparation. Finite-time expiry boundaries, source and
+scope bindings, separate permissions, and the default-clock download path are unchanged.
+
+`npm test -- --run tests/components/finance-v2-export-clock.test.tsx` exercises the
+value checks and real React lifecycle with synthetic clocks, access readers and ports.
+The tests reuse unchanged captured receipt bytes; they do not execute Finance or an
+issuer. These are local presentation safeguards, not a trusted-time service, monotonic
+clock guarantee, accepted host disclosure fence, or authorization to enable INTEGRATED.
