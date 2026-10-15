@@ -72,7 +72,8 @@ const SCOPE_KEYS = ['tenantId', 'projectId', 'environment', 'billingMode', 'acto
  * Fails closed on a missing reader, a throwing reader or a malformed answer. Returns `null` only when everything holds right now.
  */
 export function evaluateFinanceV2ExportAccess(reader: unknown, bound: Readonly<{ revision: string; scope: OpaqueProductScope }>, nowMs: number): FinanceV2ExportUnavailableReason | null {
-  if (typeof reader !== 'function') return 'no-access';
+  // A clock that cannot establish an instant cannot establish current access. Never coerce it.
+  if (!Number.isFinite(nowMs) || typeof reader !== 'function') return 'no-access';
   let revision: unknown; let scope: unknown; let capabilities: unknown; let expiresAt: unknown;
   try {
     const access: unknown = (reader as FinanceV2ExportAccessReader)();
@@ -199,7 +200,9 @@ function unavailableNow(o: FinanceV2PreparedExportOptions, boundFingerprint?: st
   const resolved = resolveFinanceV2ExportPort(o.mode, o.port);
   if (resolved.status === 'unavailable') return resolved.reason;
   if (!o.firstPage) return 'not-first-page';
-  const access = evaluateFinanceV2ExportAccess(o.access, { revision: o.authorization.revision, scope: o.scope }, (o.now ?? Date.now)());
+  let nowMs: number;
+  try { nowMs = (o.now ?? Date.now)(); } catch { return 'no-access'; }
+  const access = evaluateFinanceV2ExportAccess(o.access, { revision: o.authorization.revision, scope: o.scope }, nowMs);
   if (access !== null) return access;
   return boundFingerprint !== undefined && fingerprintOf(o.page) !== boundFingerprint ? 'source-changed' : null;
 }
@@ -236,8 +239,14 @@ export function usePreparedExport(options: FinanceV2PreparedExportOptions): Fina
 
   // A different identity or format starts from nothing: the in-flight run is cancelled, any held bytes are dropped.
   useEffect(() => () => { active.current?.cancel(); active.current = null; held.current = null; }, [runKey]);
-  // Once access no longer holds at render time, nothing prepared may stay reachable.
-  useEffect(() => { if (unavailable !== null) held.current = null; });
+  // An observed render-time veto invalidates this run, not just its visible controls.
+  // Clear both pending work and prepared status so recovery cannot revive either.
+  useEffect(() => {
+    const settledWork = settled !== null && (settled.state.phase === 'preparing' || settled.state.phase === 'prepared');
+    if (unavailable === null || (active.current === null && held.current === null && !settledWork)) return;
+    active.current?.cancel(); active.current = null; held.current = null;
+    setSettled({ key: runKey, state: { phase: 'discarded', reason: unavailable } });
+  }, [unavailable, runKey, settled]);
 
   const state: FinanceV2ExportState = unavailable !== null ? { phase: 'idle' } : settled !== null && settled.key === runKey ? settled.state : { phase: 'idle' };
 
