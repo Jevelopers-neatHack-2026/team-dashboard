@@ -39,7 +39,7 @@ export type FinanceV2ViewProps = Readonly<{
   /**
    * Host-owned transaction filters (for example kept in the URL query) so they survive detail navigation, reload and deep links.
    * Used only together with `onFiltersChange`; otherwise the list keeps its own local selection. A value that is not one of the
-   * offered options is shown as `all`, never guessed.
+   * offered options blocks the list until the user explicitly resets the selection.
    */
   filters?: FinanceV2TransactionFilters;
   onFiltersChange?: (next: FinanceV2TransactionFilters) => void;
@@ -226,8 +226,14 @@ function TransactionList({ page, detailHref, onNavigate, filters, onFiltersChang
   const selected = hostOwned ? filters : local;
   // While a read is in flight (`page` undefined) only the host's own selection is offered: no currency, row or amount of an earlier page is kept.
   const currencies = page ? page.summary.currencies.map((entry) => entry.currency) : selected.currency === 'all' ? [] : [selected.currency];
-  const valuation = (VALUATION_FILTERS as readonly string[]).includes(selected.valuation) ? selected.valuation : 'all';
-  const currency = selected.currency === 'all' || currencies.includes(selected.currency) ? selected.currency : 'all';
+  const valuation = selected.valuation;
+  const currency = selected.currency;
+  if (!(VALUATION_FILTERS as readonly string[]).includes(valuation) || (page && currency !== 'all' && !currencies.includes(currency))) {
+    return <Notice alert title="Transaction filters unavailable">
+      The selected filters are not supported by this report. No transaction rows or export are shown. Reset filters to view all delivered rows.
+      <button type="button" onClick={() => { const next = { valuation: 'all', currency: 'all' }; if (hostOwned) onFiltersChange(next); else setLocal(next); }}>Reset transaction filters</button>
+    </Notice>;
+  }
   const setValuation = (next: string) => { const value = { valuation: next, currency }; if (hostOwned) onFiltersChange(value); else setLocal(value); };
   const setCurrency = (next: string) => { const value = { valuation, currency: next }; if (hostOwned) onFiltersChange(value); else setLocal(value); };
   // The filters are the first child in both branches, so the focused native select stays mounted across ready -> loading -> ready and keeps keyboard focus and its arrow-key navigation.

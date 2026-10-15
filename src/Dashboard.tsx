@@ -52,7 +52,19 @@ function DataRoute<T>({ route, access, provider, renderRoute, exit }: {
   }, [state.status]);
   return <RouteView state={state} route={route} scope={current?.scope} renderRoute={renderRoute} onRetry={() => setAttempt((value) => value + 1)} exit={exit} focusHandoff={focusHandoff} />;
 }
-export function Dashboard<T>({ basePath, pathname, navigate, access: rawAccess, provider, renderRoute }: DashboardProps<T>) {
+export function Dashboard<T>({ basePath, pathname, navigate, access: rawAccess, provider: rawProvider, renderRoute }: DashboardProps<T>) {
+  // Resolve a usable port before presentation or read setup, preserving method
+  // receivers. React may repeat this calculation (including in StrictMode).
+  // Accessors must be pure; memoization is not an exactly-once security boundary.
+  const provider = useMemo(() => {
+    try {
+      const mode = rawProvider?.mode;
+      if (mode !== 'fixture' && mode !== 'integrated') return undefined;
+      const read = rawProvider?.readRoute;
+      if (typeof read !== 'function') return undefined;
+      return { mode, readRoute: (request) => read.call(rawProvider, request) } satisfies RouteProvider<T>;
+    } catch { return undefined; }
+  }, [rawProvider]);
   const access = snapshotHostAccess(rawAccess);
   const base = normalizeBasePath(basePath);
   const resolved = useMemo(() => resolveRoute(base, pathname), [base, pathname]);
