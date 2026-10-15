@@ -53,8 +53,9 @@ function DataRoute<T>({ route, access, provider, renderRoute, exit }: {
   return <RouteView state={state} route={route} scope={current?.scope} renderRoute={renderRoute} onRetry={() => setAttempt((value) => value + 1)} exit={exit} focusHandoff={focusHandoff} />;
 }
 export function Dashboard<T>({ basePath, pathname, navigate, access: rawAccess, provider: rawProvider, renderRoute }: DashboardProps<T>) {
-  // Inspect the injected port once per identity, before either presentation or
-  // effect setup can read it. Keep class-method receivers intact.
+  // Resolve a usable port before presentation or read setup, preserving method
+  // receivers. React may repeat this calculation (including in StrictMode).
+  // Accessors must be pure; memoization is not an exactly-once security boundary.
   const provider = useMemo(() => {
     try {
       const mode = rawProvider?.mode;

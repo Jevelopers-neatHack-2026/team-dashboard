@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { Dashboard, type RouteProvider } from '../../src';
 import type { RouteReadResult } from '../../integration';
@@ -49,12 +50,30 @@ describe('TD-01.D / TD-09 route provider recovery', () => {
     expect(screen.queryByText('old-record-canary')).toBeNull();
     expect(screen.getByText('Upstream unavailable')).toBeVisible();
   });
-  it('preserves the method receiver and snapshots a read getter once', async () => {
+  it('preserves the method receiver with a readable accessor', async () => {
     const readRoute = vi.fn(function (this: { marker: string }) { return Promise.resolve(answer(this.marker)); });
     const get = vi.fn(() => readRoute);
     const port = { mode: 'integrated', marker: 'receiver-record', get readRoute() { return get(); } } as unknown as RouteProvider<string>;
     render(<Dashboard {...base} provider={port} renderRoute={view} />);
     expect(await screen.findByText('receiver-record')).toBeVisible();
-    expect(get).toHaveBeenCalledOnce();
+    expect(get).toHaveBeenCalled();
+  });
+  it('supports a pure accessor under StrictMode without an exactly-once assumption', async () => {
+    const readRoute = vi.fn(function (this: { marker: string }) { return Promise.resolve(answer(this.marker)); });
+    const get = vi.fn(() => readRoute);
+    const port = { mode: 'integrated', marker: 'strict-record', get readRoute() { return get(); } } as unknown as RouteProvider<string>;
+    render(<StrictMode><Dashboard {...base} provider={port} renderRoute={view} /></StrictMode>);
+    expect(await screen.findByText('strict-record')).toBeVisible();
+    // StrictMode deliberately repeats render calculations; do not pin an exact count.
+    expect(get.mock.calls.length).toBeGreaterThan(1);
+    expect(readRoute).toHaveBeenCalled();
+  });
+  it.each(['mode', 'readRoute'])('contains throwing %s accessors and recovers with a data-property provider under StrictMode', async (field) => {
+    const { rerender } = render(<StrictMode><Dashboard {...base} provider={broken(field)} renderRoute={view} /></StrictMode>);
+    expect(screen.getByText('Upstream unavailable')).toBeVisible();
+    expect(document.body).not.toHaveTextContent('private-provider-canary');
+    rerender(<StrictMode><Dashboard {...base} provider={good()} renderRoute={view} /></StrictMode>);
+    expect(await screen.findByText('current-record')).toBeVisible();
+    expect(screen.queryByText('Upstream unavailable')).toBeNull();
   });
 });

@@ -7,7 +7,7 @@ Only this repository was modified. No newer provider backlog was implemented.
 
 ## Implemented contributions
 
-- #3 TD-01.D / #14 TD-09.D/E: snapshot the injected route provider once per identity before presentation or read setup. Unreadable metadata, unsupported mode and missing/non-callable reader render unavailable. Preserve method receivers, cancel replaced reads, discard late responses and recover with a new valid port. A generic `integrated` route provider remains supported; this does not enable Finance v2 INTEGRATED mode.
+- #3 TD-01.D / #14 TD-09.D/E: resolve a usable injected route provider before presentation or read setup. React may repeat the memo calculation, including under StrictMode; accessors must be pure and repeatable. Memoization does not guarantee exactly-once inspection or provide a security boundary. Unreadable metadata, unsupported mode and missing/non-callable reader render unavailable. Preserve method receivers, cancel replaced reads, discard late responses and recover with a new valid port. A generic `integrated` route provider remains supported; this does not enable Finance v2 INTEGRATED mode.
 - #7 TD-03.A/B/E: unsupported transaction valuation or a currency absent from the delivered summary no longer silently selects all rows. Show an unavailable notice and hide transaction rows/export presentation until an explicit reset. This is delivered-page filtering, not a new producer query contract. Tests cover separate unsupported dimensions, reset, URL state and keyboard/reload behavior. The test host was corrected to distinguish an explicit empty query from a navigation that preserves the query.
 - #16: regression evidence for those contributions; no change to global acceptance.
 
@@ -72,3 +72,11 @@ Sequential final full browser execution (`TD_ARTIFACT_DIR=/private/tmp/td-final-
 Separate final default `npm test -- --run` replay, without competing builds/unit suites: **1,332/1,332 passed, 24 files, zero skipped**, 8.25s. The previous default-concurrency timing failure remains recorded. No existing pagination test was edited. Final lint/typecheck also passed.
 
 Independent exact-base/head review, merge and post-merge evidence belong to the orchestrator. This report does not substitute self-review for approval or close any issue.
+
+## TD-REVIEW-001 follow-up
+
+Independent review of base `5aa5dda931b1188115d4a46d9e5da7fee2204b06` / head `c7a570b238e0e609eea6334943a2bcc26744c5d9` found that the exactly-once-per-identity claim was incorrect under React StrictMode. The source comment and contribution description above now state that React may repeat memo calculations; accessors must be pure and repeatable, and this cache is not a security boundary. Runtime acceptance of readable accessors and class method receivers is preserved.
+
+Three added StrictMode regressions verify repeated pure-accessor inspection with successful receiver-bound rendering, containment of throwing mode/read accessors, and recovery with a normal data-property provider. The existing receiver test no longer asserts a universal exactly-once count. No exact StrictMode invocation count is assumed.
+
+Affected checks actually executed: `npm test -- --run tests/components/route-provider-recovery.test.tsx tests/components/boundaries.test.tsx` **40/40 passed in 2 files**, including all 15 route-provider cases; `npm run lint`, `npm run typecheck`, `npm run build` and `git diff --check` passed. These are focused follow-up results, not a new full-suite or browser replay. The earlier **232/233** browser result and all its limitations remain unchanged. The filter-reset implementation, accepted receipts and contract pin were not changed. Fresh exact-head independent review remains supervisor-owned; this records a proposed resolution, not reviewer approval, merge or closure.
