@@ -43,6 +43,10 @@ function summaryPath(summary: unknown): string | undefined {
     if (entry.scale !== 18) return `${base}/scale`;
     const bad = metricsPath(entry.metrics, `${base}/metrics`); if (bad) return bad;
     if (!record(entry.valuation)) return `${base}/valuation`;
+    // This view renders only the pinned valuation axes. Refuse newer buckets
+    // (including reportedUnsettled) until their presentation is supported;
+    // silently dropping a supplied bucket would misrepresent the breakdown.
+    if (Object.keys(entry.valuation).some((key) => !['estimated', 'confirmed', 'unknownCount'].includes(key))) return `${base}/valuation`;
     for (const key of ['estimated', 'confirmed'] as const) { const worse = amountPath(entry.valuation[key], `${base}/valuation/${key}`); if (worse) return worse; }
     if (!count(entry.valuation.unknownCount)) return `${base}/valuation/unknownCount`;
     if (!record(entry.reconciliation)) return `${base}/reconciliation`;
